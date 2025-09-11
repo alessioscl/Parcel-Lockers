@@ -935,7 +935,7 @@ def process_end_of_day_assignments(current_state, day, data, results):
     
     for request, assigned_locker in pending:
         size_req = request['size']
-        pickup_time = modify_pickup(data,assigned_locker)  # This is known during simulation but not to the system
+        pickup_time = modify_pickup(request,data,assigned_locker)  # This is known during simulation but not to the system
         pickup_day = day + pickup_time
         
         # Ensure pickup_day doesn't exceed max_day (13)
@@ -1576,48 +1576,43 @@ def oracle_new(data):
     model.optimize()
     return(model)
 
-def modify_pickup(data, assigned_locker):
+def modify_pickup(request,data, assigned_locker):
     """Modifica il pickup time di una richiesta in base alla distanza dal locker assegnato"""
     data = data.copy()
-    lockers = data['lockers']
-    J = data['J']
-    I = data['I']
-    requests = data['df_requests']
-    for i in I:
-        original_pickup_time = requests.loc[i-1]['pickup_time']
-        customer_pos = (requests.loc[i-1]['x'], requests.loc[i-1]['y'])  # Assumendo che le coordinate siano nel dizionario
+    #customer_pos = data['df_requests'].loc[request['request_id']][['x', 'y']].values
+    customer_pos = (request['x'], request['y'])  # Assumendo che le coordinate siano nel dizionario
+    original_pickup_time = request['pickup_time']
+    #customer_pos = (request['x'], request['y'])  # Assumendo che le coordinate siano nel dizionario
+    locker_pos = (data['lockers'][assigned_locker]['x'], data['lockers'][assigned_locker]['y'])  # Assumendo che
+    distance = calculate_distance(customer_pos, locker_pos)
 
-        locker_pos = (lockers[assigned_locker]['x'], lockers[assigned_locker]['y'])  # Assumendo che le coordinate siano nel dizionario
-        distance = calculate_distance(customer_pos, locker_pos)
-        
-        # Calcolo del pickup time ridotto basato sulla distanza
-        if original_pickup_time == 1:
-            # Per pickup time 1 non cambia nulla
+    if original_pickup_time == 1:
+        # Per pickup time 1 non cambia nulla
+        effective_pickup_time = 1
+        return effective_pickup_time
+    elif original_pickup_time == 2:
+        # Si riduce a 1 se distanza <= 10
+        if distance <= 10:
             effective_pickup_time = 1
             return effective_pickup_time
-        elif original_pickup_time == 2:
-            # Si riduce a 1 se distanza <= 10
-            if distance <= 10:
-                effective_pickup_time = 1
-                return effective_pickup_time
-            else:
-                effective_pickup_time = 2
-                return effective_pickup_time
-        elif original_pickup_time == 3:
-            # Si riduce a 1 se distanza <= 10, a 2 se distanza <= 20
-            if distance <= 10:
-                effective_pickup_time = 1
-                return effective_pickup_time
-            elif distance <= 20:
-                effective_pickup_time = 2
-                return effective_pickup_time
-            else:
-                effective_pickup_time = 3
-                return effective_pickup_time
         else:
-            # Per pickup time > 3, mantieni la logica originale
-            effective_pickup_time = original_pickup_time
+            effective_pickup_time = 2
             return effective_pickup_time
+    elif original_pickup_time == 3:
+        # Si riduce a 1 se distanza <= 10, a 2 se distanza <= 20
+        if distance <= 10:
+            effective_pickup_time = 1
+            return effective_pickup_time
+        elif distance <= 20:
+            effective_pickup_time = 2
+            return effective_pickup_time
+        else:
+            effective_pickup_time = 3
+            return effective_pickup_time
+    else:
+        # Per pickup time > 3, mantieni la logica originale
+        effective_pickup_time = original_pickup_time        
+        return effective_pickup_time
 
 
 
