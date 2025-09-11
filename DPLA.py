@@ -22,9 +22,7 @@ warnings.filterwarnings("ignore")
 
 def prepare_data(n_days, n_requests_per_day, n_lockers):
     """
-    Genera i dataset di input per il problema Dynamic Parcel Locker Allocation
-    e li converte in strutture compatibili con Gurobi.
-    
+    Genera dati sintetici per richieste e locker, e prepara le strutture dati necessarie
     Parametri:
       - n_days: numero di giorni (time horizon T)
       - n_requests_per_day: richieste per ciascun giorno
@@ -45,15 +43,13 @@ def prepare_data(n_days, n_requests_per_day, n_lockers):
       - 'phi_dict': dizionario con chiave (i, j) e valore 0 o 1, per la compatibilità
       - 'C': dizionario con chiave (j, k) e valore numero di compartimenti di tipo k nel locker j
     """
-    # -------------------------------
-    # Generazione dati richieste (df_requests)
-    # -------------------------------
+
     T = set(range(n_days))
     requests_per_day = {}
     total_requests = 0
-    # Per ogni giorno genera un numero di richieste variabile (base ±10)
+
     for t in sorted(T):
-        # Assicuriamo un minimo di 1 richiesta per giorno
+ 
         arrivals = np.random.randint(max(n_requests_per_day - 10, 1), n_requests_per_day + 11)
         requests_per_day[t] = arrivals
         total_requests += arrivals
@@ -65,7 +61,7 @@ def prepare_data(n_days, n_requests_per_day, n_lockers):
     I_alpha = {i: np.random.choice([1, 2, 3, 4], p=[0.4, 0.2, 0.2, 0.2]) for i in I}
     I_size = {i: np.random.choice([1, 2, 3], p=[0.5, 0.3, 0.2]) for i in I}  # s_i
 
-    # Assegna ad ogni richiesta il giorno di arrivo (τ_i)
+
     I_t = {}
     counter = 1
     for t in sorted(T):
@@ -88,20 +84,14 @@ def prepare_data(n_days, n_requests_per_day, n_lockers):
     df_requests['order'] = df_requests.groupby('arrival_day').cumcount() + 1
     df_requests['order_ss'] = df_requests.groupby(['arrival_day','size']).cumcount() + 1
     df_requests['order_st'] = df_requests.groupby(['arrival_day','type']).cumcount() + 1
-    # -------------------------------
-    # Generazione dati locker (df_lockers)
-    # -------------------------------
+
     J = list(range(1, n_lockers + 1))
     
-    # Se n_lockers == 5 usiamo posizioni fisse, altrimenti generiamo coordinate casuali
-    #if n_lockers == 5:
-    #    J_x = {1: 50, 2: 25, 3: 25, 4: 75, 5: 75}
-    #    J_y = {1: 50, 2: 25, 3: 75, 4: 25, 5: 75}
-    #else:
+
     J_x = {j: np.random.randint(0, 100) for j in J}
     J_y = {j: np.random.randint(0, 100) for j in J}
     
-    # Definizione dei compartimenti per ciascun locker
+ 
     J_C_1 = {j: 10 for j in J}  # Compartimenti piccoli
     J_C_2 = {j: 10 for j in J}  # Compartimenti medi
     J_C_3 = {j: 5  for j in J}  # Compartimenti grandi
@@ -115,19 +105,13 @@ def prepare_data(n_days, n_requests_per_day, n_lockers):
         "C_3": [J_C_3[j] for j in J]
     })
     
-    # -------------------------------
-    # Matrice di compatibilità phi: ϕ_ij = 1 se la distanza tra richiesta i e locker j è < 50
-    # -------------------------------
     phi = pd.DataFrame(index=df_requests['i'], columns=df_lockers['j'], dtype=int)
     for _, row_req in df_requests.iterrows():
         for _, row_lock in df_lockers.iterrows():
             dist = np.sqrt((row_req['x'] - row_lock['x'])**2 + (row_req['y'] - row_lock['y'])**2)
             phi.at[row_req['i'], row_lock['j']] = 1 if dist < 50 else 0
 
-    # -------------------------------
-    # Preparazione dei dati per Gurobi
-    # -------------------------------
-    # Dizionari per richieste e locker
+
     requests_dict = df_requests.set_index('i').to_dict(orient='index')
     lockers_dict = df_lockers.set_index('j').to_dict(orient='index')
     
@@ -141,10 +125,6 @@ def prepare_data(n_days, n_requests_per_day, n_lockers):
         for k in K:
             C[(j, k)] = df_lockers.loc[df_lockers['j'] == j, f'C_{k}'].iloc[0]
     
-
-    # -------------------------------
-    # Restituisce tutti i dati
-    # -------------------------------
     return {
         "df_requests": df_requests,
         "df_lockers": df_lockers,
@@ -162,16 +142,8 @@ def prepare_data(n_days, n_requests_per_day, n_lockers):
 def read_from_excel(instance_file, locker_file, n_lockers):
     """
     Reads data from Excel files and formats it to match prepare_data() output structure.
-    
-    Parameters:
-    - instance_file: path to Excel file containing requests data
-    - locker_file: path to Excel file containing locker data
-    - n_lockers: number of lockers to use (4, 6, or 8)
-    
-    Returns:
-    - Dictionary with same structure as prepare_data() output
     """
-    # Read requests data
+
     df_requests = pd.read_excel(instance_file)
     #df_requests = modify_pickup_to_4_days(df_requests)
     #mapping = {
@@ -181,7 +153,7 @@ def read_from_excel(instance_file, locker_file, n_lockers):
     #}
     #df_requests['pickup_time'] = df_requests['pickup_time'].map(mapping)
 
-    # Read lockers data
+
     df_lockers = pd.read_excel(locker_file)
     
     T = set(df_requests['arrival_day'].unique())
@@ -189,11 +161,10 @@ def read_from_excel(instance_file, locker_file, n_lockers):
     J = list(df_lockers['j'].unique())
     K = {1, 2, 3}
     
-    # Create requests dictionary
+
     requests_dict = df_requests.set_index('i').to_dict(orient='index')
     lockers_dict = df_lockers.set_index('j').to_dict(orient='index')
     
-    # Create phi matrix and dictionary
     distance = pd.DataFrame(index=df_requests['i'], columns=df_lockers['j'], dtype=int)
     phi = pd.DataFrame(index=df_requests['i'], columns=df_lockers['j'], dtype=int)
     for _, row_req in df_requests.iterrows():
@@ -203,13 +174,13 @@ def read_from_excel(instance_file, locker_file, n_lockers):
             phi.at[row_req['i'], row_lock['j']] = 1 if dist < 50 else 0
     phi_dict = {(i, j): int(phi.loc[i, j]) for i in I for j in J}
 
-    # Create capacity dictionary
+ 
     C = {}
     for j in J:
         for k in K:
             C[(j, k)] = df_lockers.loc[df_lockers['j'] == j, f'C_{k}'].iloc[0]
     
-    # Return formatted data
+
     return {
         "df_requests": df_requests,
         "df_lockers": df_lockers,
@@ -250,18 +221,17 @@ def oracle(data):
     n_days = len(T)
     T_ext = set(range(n_days + max_pickup + 1))
 
-    # Creazione del modello Gurobi
+
     model = gb.Model('ParcelLockerOracle')
 
-    # Definizione delle variabili (definite come globali per essere usate in extract_solution)
+
     global x, y, z, u
     x = model.addVars(I, vtype=GRB.BINARY, name='x')
     y = model.addVars(I, J, vtype=GRB.BINARY, name='y')
     z = model.addVars(I, J, K, vtype=GRB.BINARY, name='z')
     u = model.addVars(I, J, K, T_ext, vtype=GRB.BINARY, name='u')
 
-    # CONSTRAINTS
-    # (1) Una richiesta viene assegnata ad uno e un solo locker se è accettata
+
     for i in I:
         model.addConstr(gb.quicksum(y[i, j] for j in J) == x[i])
     
@@ -292,7 +262,7 @@ def oracle(data):
             for k in K:
                 model.addConstr(gb.quicksum(u[i, j, k, t] for i in I) <= C[(j, k)])
     
-    # OBJECTIVE FUNCTION: massimizzare la somma dei pesi delle richieste assegnate
+
     model.setObjective(gb.quicksum(requests[i]['weight'] * x[i] for i in I), GRB.MAXIMIZE)
     model.update()
     # Facoltativo: model.write(f'model_{n_lockers}_lockers.lp')
@@ -319,43 +289,38 @@ def extract_solution(data):
                 - P4: locker più periferico (più lontano da (50,50))
                 - P5: altro
                 - P6: non assegnato
-                - P7: unico assegnamento
-                - P8: locker più utilizzato durante il giorno
-                - P9: locker meno utilizzato durante il giorno
+                - P7: unico assegnamento possibile
     La funzione utilizza le variabili Gurobi (x, y, z) definite globalmente e i dati 
     contenuti nel dizionario "data" (output di prepare_data).
     
     La funzione deve essere chiamata dopo che il modello è stato ottimizzato.
     """
-    
 
-
-    # Recupero dataframe e dizionari di input
     df_requests = data["df_requests"].copy()
     requests = data["requests"]
     phi_dict = data["phi_dict"]
     C = data["C"]
     J = data["J"]
     K = data["K"]
-    lockers = data["lockers"]  # contiene coordinate (x,y) per ogni locker
+    lockers = data["lockers"]  
     
-    # Numero di giorni e richieste per giorno (assumiamo costante)
+
     n_days = len(data["T"])
     n_requests_per_day = int(df_requests.groupby("arrival_day").size().iloc[0])
     max_pickup = max(req['pickup_time'] for req in requests.values())
     
 
-    max_day = n_days + max_pickup + 2  # per coprire eventuali giorni oltre il time horizon
+    max_day = n_days + max_pickup + 2  
     occupancy = {(j, k, d): 0 for j in J for k in K for d in range(max_day)}
     freeing = {(j, k, d): 0 for j in J for k in K for d in range(max_day)}
     
 
     sorted_requests = sorted(data["I"], key=lambda i: (requests[i]['arrival_day'], requests[i].get('order', i)))
     
-    # Tracciamo le richieste assegnate fino ad un certo momento per ogni giorno
-    assigned_until_now = {d: {} for d in range(n_days+1)}  # giorno -> {i -> (j, k)}
+    
+    assigned_until_now = {d: {} for d in range(n_days+1)}  
     assignment = {}
-    # Per ogni richiesta assegnata, ricaviamo locker e compartimento utilizzato e aggiorniamo occupancy e freeing.
+    
     for i in sorted_requests:
             d = requests[i]['arrival_day']
             p = requests[i]['pickup_time']
@@ -364,10 +329,10 @@ def extract_solution(data):
                 if y[i, j].X > 0.5:
                     assigned_j = j
                     break
-            assignment[i] = assigned_j  # memorizziamo l'assegnazione (anche se None)
+            assignment[i] = assigned_j  
             if assigned_j is None:
                 continue
-            # Individuiamo il compartimento (tipo) assegnato (deve essercene uno solo)
+            
             assigned_k = None
             for k in K:
                 if z[i, assigned_j, k].X > 0.5:
@@ -375,57 +340,47 @@ def extract_solution(data):
                     break
             if assigned_k is None:
                 continue
-            
-            #assignment[i] = (assigned_j, assigned_k)
 
-            # Memorizziamo l'assegnazione per questa richiesta
             if d not in assigned_until_now:
                 assigned_until_now[d] = {}
             assigned_until_now[d][i] = (assigned_j, assigned_k)
-            
-            # La richiesta occupa il compartimento dal giorno (d+1) fino a (d+p)
+
             for day in range(d + 1, d + p + 1):
                 occupancy[(assigned_j, assigned_k, day)] += 1
             
-            # Il compartimento si libera il giorno (d + p + 1)
+
             free_day = d + p + 1
             if free_day < max_day:
                 freeing[(assigned_j, assigned_k, free_day)] += 1
                 
-    
-    # Calcolo delle expected future request:
+
     df_requests['order'] = df_requests.groupby('arrival_day').cumcount() + 1
     
-    # Definizione delle probabilità di size e type
+
     size_probs = {1: 0.5, 2: 0.3, 3: 0.2}
     type_probs = {'premium': 0.7, 'standard': 0.3}
     
-    # Calcolo delle expected future requests basato sulle probabilità
+
     df_requests['expected_future'] = 100 - df_requests['order']
 
 
     df_requests['order_ss'] = df_requests.groupby(['arrival_day','size']).cumcount() + 1
     df_requests['order_st'] = df_requests.groupby(['arrival_day','type']).cumcount() + 1
-    # Aggiunta dei campi per expected_future_same_size e expected_future_type
+
     df_requests['expected_future_same_size'] = 0
     df_requests['expected_future_type'] = 0
     
-    # Calcolo dei valori attesi per ogni richiesta
+
     for idx, row in df_requests.iterrows():
-        #remaining_requests = 100 - row['order']
-        
-        # Calcolo delle richieste attese della stessa dimensione
         expected_same_size = 100 * size_probs[row['size']]
         df_requests.loc[idx, 'expected_future_same_size'] = expected_same_size - row['order_ss']
         
-        # Calcolo delle richieste attese dello stesso tipo
         expected_same_type = 100 * type_probs[row['type']]
         df_requests.loc[idx, 'expected_future_type'] = expected_same_type - row['order_st']
 
-    # Ordinamento delle richieste per giorno e ordine di arrivo
+
     df_requests.sort_values(by=['arrival_day', 'order'], inplace=True)
-    
-    # Calcolo delle capacità e compatibilità per ogni richiesta
+
     num_compatibili_list = []
     cap_residua_list = []
     cap_occupata_domani_list = []
@@ -437,7 +392,7 @@ def extract_solution(data):
         current_order = df_requests.loc[df_requests['i'] == i, 'order'].iloc[0]
 
         
-        # Numero di locker compatibili
+   
         num_compatibili = sum(phi_dict[(i, j)] for j in J) / len(J)
         
         cap_residua = 0
@@ -447,20 +402,16 @@ def extract_solution(data):
             if phi_dict[(i, j)] == 1:
                 for k in K:
                     if k >= size_req:
-                        # Box liberi oggi + box che si liberano domani
+
                         available_today = C[(j, k)] - occupancy[(j, k, d)]
                         freeing_tomorrow = freeing[(j, k, d+1)]
                         cap_residua += available_today + freeing_tomorrow
                 
-                # Calcolo della capacità sicuramente occupata domani basato sulle richieste
-                # assegnate fino al momento in cui arriva la richiesta i
+
                 for prev_i, (prev_j, prev_k) in assigned_until_now.get(d, {}).items():
                     prev_order = df_requests.loc[df_requests['i'] == prev_i, 'order'].iloc[0]
                     prev_size = requests[prev_i]['size']
                     if prev_order < current_order and prev_j == j and prev_size >= size_req:
-                        # Questa richiesta è stata assegnata prima dell'arrivo della richiesta corrente
-                        # e al locker j compatibile con la richiesta corrente
-                        # e con dimensione >= alla dimensione richiesta
                         cap_occupata_domani += 1
         
         num_compatibili_list.append(num_compatibili)
@@ -474,23 +425,22 @@ def extract_solution(data):
     
     
     # Calcolo POLICY per ogni richiesta
-    # Il centro del quadrato è fisso (50, 50)
     center_coords = (50, 50)
     policy_dict = {}
     
     for i in data["I"]:
         arrival_day = requests[i]['arrival_day']
-        size_req = int(requests[i]['size'])  # compartimento richiesto
+        size_req = int(requests[i]['size'])  
         assigned = assignment[i]
         free_capacities = {}
-        # Calcolo della capacità libera per ogni locker compatibile per il compartimento richiesto
+       
         for j in J:
             for k in K:
                 if phi_dict[(i, j)] == 1 and k >= size_req:
                     free_capacities[j] = C[(j, k)] - occupancy[(j, k, arrival_day)]
                 
         policies = []
-        # Se la richiesta non è assegnata, aggiungiamo direttamente la policy P6
+
         if assigned is None:
             policies.append("P6")
         else:
@@ -498,14 +448,14 @@ def extract_solution(data):
                 if len(free_capacities) == 1:
                     policies.append("P7")
                 else:
-                    # Determiniamo il locker con capacità libera massima e minima
+
                     j_max = max(free_capacities, key=lambda j: free_capacities[j])
                     j_min = min(free_capacities, key=lambda j: free_capacities[j])
-                    # Determiniamo il locker più centrale e quello più periferico basandosi sulla distanza dal centro (50,50)
+
                     j_central = min(free_capacities, key=lambda j: np.sqrt((lockers[j]['x'] - center_coords[0])**2 + (lockers[j]['y'] - center_coords[1])**2))
                     j_peripheral = max(free_capacities, key=lambda j: np.sqrt((lockers[j]['x'] - center_coords[0])**2 + (lockers[j]['y'] - center_coords[1])**2))
                     
-                    # Verifichiamo ogni condizione in modo indipendente e aggiungiamo la policy corrispondente se verificata
+
                     if assigned == j_max:
                         policies.append("P1")
                     if assigned == j_min:
@@ -514,13 +464,13 @@ def extract_solution(data):
                         policies.append("P3")
                     if assigned == j_peripheral:
                         policies.append("P4")
-                    # Se nessuna delle condizioni è soddisfatta, aggiungiamo P5
+                    
                     if not policies:
                         policies.append("P5")
             else:
                 policies.append("P5")
         
-        # Salviamo la lista delle policy (convertita in stringa separata da virgole) per la richiesta
+        
         policy_dict[i] = ", ".join(policies)
 
     df_requests['policy'] = df_requests['i'].map(policy_dict)
@@ -528,7 +478,6 @@ def extract_solution(data):
     
     df_requests['arrival_day'] = df_requests['arrival_day'] / n_days  
 
-    # Selezioniamo le colonne richieste (inclusa la policy)
     result_df = df_requests[['arrival_day', 'type', 'size', 'pickup_time',
                               'num_compatible', 'residual_cap',
                               'expected_future', 'expected_future_same_size', 'expected_future_type','occupied_cap_tom',
@@ -554,14 +503,14 @@ def extract_ml_features(request, current_requests, occupancy, data):
     - Dictionary con le feature estratte
     """
 
-    # Estrazione dati necessari
+
     J = data["J"]
     K = data["K"]
     C = data["C"] 
     phi_dict = data["phi_dict"]
     lockers = data["lockers"]
     
-    # Feature di base della richiesta
+
     features = {
         'arrival_day': request['arrival_day'] / len(data["T"]),
         'type': 1 if request['type'] == 'premium' else 0,
@@ -569,11 +518,9 @@ def extract_ml_features(request, current_requests, occupancy, data):
         'pickup_time': request['pickup_time'],  #.get('pickup_time', 3),  # Default value as pickup time is unknown during assignment
         'order': request.get('order', 0)
     }
-    
-    # Numero di locker compatibili
+
     features['num_compatible'] = sum(phi_dict.get((request['request_id'], j), 0) for j in J) / len(J)
-    
-    # Calcolo capacità residua e occupata
+
     cap_residua = 0
     cap_occupata_domani = 0
     
@@ -581,11 +528,10 @@ def extract_ml_features(request, current_requests, occupancy, data):
         if phi_dict.get((request['request_id'], j), 0) == 1:
             for k in K:
                 if k >= request['size']:
-                    # Box liberi domani (day + 1)
+
                     available_tomorrow = C[(j, k)] - occupancy.get((j, k, request['arrival_day'] + 1), 0)
                     cap_residua += available_tomorrow
-            
-            # Capacità occupata dalle richieste precedenti
+
             prev_requests = [r for r in current_requests if r.get('order', 0) < request.get('order', 0)]
             for prev_req in prev_requests:
                 if phi_dict.get((prev_req['request_id'], j), 0) == 1:
@@ -595,19 +541,18 @@ def extract_ml_features(request, current_requests, occupancy, data):
     features['residual_cap'] = cap_residua
     features['occupied_cap_tom'] = cap_occupata_domani
     
-    # Expected future requests - FISSATO: calcola su base giornaliera
-    total_requests_per_day = 100  # assumiamo 100 richieste al giorno come nel dataset originale
+    
+    total_requests_per_day = 100  
     day_requests_remaining = total_requests_per_day - sum(1 for r in current_requests 
                                                        if r['arrival_day'] == request['arrival_day'] and 
                                                        r.get('order', 0) <= request.get('order', 0))
     features['expected_future'] = day_requests_remaining
     
-    # Probabilità per size e type
+    
     size_probs = {1: 0.5, 2: 0.3, 3: 0.2}
     type_probs = {'premium': 0.7, 'standard': 0.3}
     
-    # FISSATO: Calcolo di expected_future_same_size e expected_future_type su base giornaliera
-    # Conta le richieste già processate oggi dello stesso size/type
+    
     same_size_today = sum(1 for r in current_requests 
                         if r['arrival_day'] == request['arrival_day'] and 
                         r['size'] == request['size'])
@@ -616,19 +561,19 @@ def extract_ml_features(request, current_requests, occupancy, data):
                         if r['arrival_day'] == request['arrival_day'] and 
                         r['type'] == request['type'])
     
-    # Calcola le richieste attese per il resto della giornata
+
     expected_same_size = total_requests_per_day * size_probs[request['size']] - same_size_today
     expected_same_type = total_requests_per_day * type_probs[request['type']] - same_type_today
     
     features['expected_future_same_size'] = max(0, expected_same_size)
     features['expected_future_type'] = max(0, expected_same_type)
 
-    # Feature aggiuntive sulla posizione dei locker
+
     center_coords = (50, 50)
     compatible_lockers = [j for j in J if phi_dict.get((request['request_id'], j), 0) == 1]
     
     if compatible_lockers:
-        # Distanza dal centro per i locker compatibili
+ 
         distances = [np.sqrt((lockers[j]['x'] - center_coords[0])**2 + 
                            (lockers[j]['y'] - center_coords[1])**2) 
                     for j in compatible_lockers]
@@ -742,22 +687,22 @@ def predict_optimal_locker(request, data, current_state, model, mlb, mode = 'mul
     
     #print(f"\n[DEBUG] Processing request {request['request_id']} (Day {arrival_day}, Size {size_req}, Type {request['type']})")
     
-    # Prima verifica i vincoli globali di capacità
+
     if not check_capacity_constraints(request, data, current_state):
         #print(f"[DEBUG] Request {request['request_id']} rejected: Failed capacity constraints check")
         return None, 'capacity'
     
-    # Calcolo capacità libere per locker compatibili
+
     feasible_lockers = {}
     
     for j in J:
         if phi_dict.get((request['request_id'], j), 0) == 1:
-            # Verifica che il locker abbia almeno un compartimento disponibile per il giorno di assegnamento
+
             available_capacity = 0
             
             for k in K:
                 if k >= size_req:
-                    # Controlliamo solo per il giorno di assegnamento (day+1)
+
                     current_occupancy = current_state['temp_occupancy'].get((j, k, next_day), 0)
                     total_capacity = C.get((j, k), 0)
                     
@@ -769,7 +714,7 @@ def predict_optimal_locker(request, data, current_state, model, mlb, mode = 'mul
                 feasible_lockers[j] = available_capacity
                 #print(f"[DEBUG] Locker {j} is feasible with {available_capacity} available slots")
     
-    # Se non ci sono locker fattibili, rifiuta la richiesta
+  
     if not feasible_lockers:
         #print(f"[DEBUG] Request {request['request_id']} rejected: No feasible lockers")
         return None, 'capacity'
@@ -798,8 +743,7 @@ def predict_optimal_locker(request, data, current_state, model, mlb, mode = 'mul
         if prediction == 0:  # Reject
             #print(f"[DEBUG] Request {request['request_id']} rejected by binary model")
             return None, 'ml_reject'
-        else:  # Accept and assign to nearest feasible locker
-            # Calculate distances to all feasible lockers
+        else:  
             #locker_distances = {}
             #for j in feasible_lockers:
             #    distance = np.sqrt((lockers[j]['x'] - request['x'])**2 + 
@@ -814,24 +758,24 @@ def predict_optimal_locker(request, data, current_state, model, mlb, mode = 'mul
         
     elif mode == 'multilabel': # MULTILABEL
         X = prepare_ml_input(request, current_state, data)
-        #X = np.array(X).reshape(1, -1)  # Reshape per il modello
+        #X = np.array(X).reshape(1, -1)  
         policy_probs = model.predict_proba(X).toarray()[0]  # Ottieni le probabilità per ogni policy
         
-        # Converti in dizionario policy -> probabilità
+        
         policy_dict = {}
         for policy, prob_array in zip(mlb.classes_, policy_probs):
-            # Prendi il valore massimo di probabilità per ogni policy
+            
             policy_dict[policy] = np.max(prob_array)
         
         #print(f"[DEBUG] Policy probabilities: {policy_dict}")
         
-        # Scegli la policy con la probabilità più alta
+        
         if 'P6' in policy_dict and policy_dict['P6'] > 0.5:# and all(p<0.5 for p in policy_dict.values()):
             # Rifiuta la richiesta
             #print(f"[DEBUG] Request {request['request_id']} rejected: Policy P6 selected")
             return None, 'ml_reject'
         else:
-            # Escludi P6 per trovare la policy migliore tra le altre
+            
             best_policies = {p: prob for p, prob in policy_dict.items() if p != 'P6' and prob > 0.5}
             if not best_policies:
                 locker_distances = {}
@@ -846,7 +790,7 @@ def predict_optimal_locker(request, data, current_state, model, mlb, mode = 'mul
             best_policy = max(best_policies, key=best_policies.get)
             #print(f"[DEBUG] Selected policy: {best_policy}")
             
-            # Applica la policy selezionata sui locker fattibili
+            
             if best_policy == 'P1':  # Massima capacità
                 locker_choice = max(feasible_lockers.items(), key=lambda x: x[1])[0]
             elif best_policy == 'P2':  # Minima capacità
@@ -856,7 +800,7 @@ def predict_optimal_locker(request, data, current_state, model, mlb, mode = 'mul
             elif best_policy == 'P4':  # Più periferico
                 locker_choice = max(locker_metrics.items(), key=lambda x: x[1]['distance'])[0]
             elif best_policy == 'P5':  # Bilanciamento carico
-                # Trova il locker con il rapporto carico/capacità più basso
+                
                 locker_distances = {}
                 for j in feasible_lockers:
                     distance = np.sqrt((lockers[j]['x'] - request['x'])**2 + 
@@ -918,12 +862,11 @@ def process_end_of_day_assignments(current_state, day, data, results):
     
     pending = current_state['pending_assignments'][day]
     
-    # Debug: show pending requests
     #print(f"[DEBUG] Pending assignments for day {day}: {len(pending)} requests")
     #for i, (req, locker) in enumerate(pending):
         #print(f"[DEBUG] {i+1}: Request ID {req['request_id']}, Size {req['size']}, Type {req['type']}, Locker {locker}")
     
-    # Sort by type (premium first) and then by size (smaller first)
+
     #pending.sort(key=lambda x: (0 if x[0]['type'] == 'premium' else 1, x[0]['size']))
     
     #print(f"[DEBUG] Sorted pending assignments:")
@@ -935,20 +878,20 @@ def process_end_of_day_assignments(current_state, day, data, results):
     
     for request, assigned_locker in pending:
         size_req = request['size']
-        pickup_time = modify_pickup(request,data,assigned_locker)  # This is known during simulation but not to the system
+        pickup_time = modify_pickup(request,data,assigned_locker)  
         pickup_day = day + pickup_time
         
-        # Ensure pickup_day doesn't exceed max_day (13)
+ 
         #pickup_day = min(pickup_day, 13)
         
         #print(f"\n[DEBUG] Assigning compartment for request {request['request_id']} to locker {assigned_locker}")
         #print(f"[DEBUG] Request size: {size_req}, Pickup time: {pickup_time}, Pickup day: {pickup_day}")
         
-        # Look for the smallest compatible compartment available
+    
         assigned_k = None
-        for k in sorted(K):  # Sort K to look for smaller compartments first
-            if k >= size_req:  # The compartment must be at least the required size
-                # Check if there's space for the assignment day
+        for k in sorted(K):  
+            if k >= size_req:  
+                
                 current_occupancy = current_state['occupancy'].get((assigned_locker, k, day + 1), 0)
                 total_capacity = data['C'].get((assigned_locker, k), 0)
                 
@@ -959,20 +902,20 @@ def process_end_of_day_assignments(current_state, day, data, results):
                     assigned_k = k
                     #print(f"[DEBUG] Assigned compartment size {k}")
                     
-                    # Update occupancy for all days the package will be in the locker
+                    
                     for d in range(day + 1, pickup_day + 1):
                         current_occ = current_state['occupancy'].get((assigned_locker, k, d), 0)
                         current_state['occupancy'][(assigned_locker, k, d)] = current_occ + 1
                         #print(f"[DEBUG] Updated occupancy for day {d}: now {current_occ + 1}/{total_capacity}")
                     break
         
-        # Update results with compartment assignment
+        
         assigned = False
         for result in results:
             if result['request_id'] == request['request_id']:
                 result['compartment_size'] = assigned_k
                 
-                # If it wasn't possible to assign a compartment, change status to rejected
+               
                 if assigned_k is None:
                     result['status'] = 'rejected'
                     result['assigned_locker'] = None
@@ -1000,12 +943,6 @@ def ML_policy(data, model=None, mlb=None, mode = 'multilabel'):
     K = data["K"]
     max_day = 13  
     
-    # Initialize system state
-    #current_state = {
-    #    'pending_assignments': {},  # Requests waiting for compartment assignment
-    #    'current_requests': []  # Requests processed so far
-    #    'occupancy': {(j, k, d): 0 for j in J for k in K for d in range(max_day+1)},  # Compartment occupancy
-    #}
     
     current_state = {
         'occupancy': {},  # (j, k, t) -> occupancy count
@@ -1041,25 +978,11 @@ def ML_policy(data, model=None, mlb=None, mode = 'multilabel'):
         
         current_day = day
         
-        # Decide whether to accept or reject the request
+
         #print(f"\n[DEBUG] Day {day}: Processing request {i}")
         assigned_locker, decision_reason = predict_optimal_locker(request, data, current_state, model, mlb, mode)
 
-        # If the request is accepted, add to the list of requests waiting for compartment assignment
-        #if assigned_locker is not None:
-        #    if day not in current_state['pending_assignments']:
-        #        current_state['pending_assignments'][day] = []
-        #    current_state['pending_assignments'][day].append((request, assigned_locker))
-        #    #key = (assigned_locker, size, day + 1)
-        #    #current_state['temp_occupancy'][key] = current_state['temp_occupancy'].get(key, 0) + 1
-        #    current_state['temp_occupancy'][(assigned_locker, k, next_day)] = current_state['temp_occupancy'].get((assigned_locker, k, next_day), 0) + 1
-        #    status = decision_reason
-        #    print(f"[DEBUG] Request {i} accepted and assigned to locker {assigned_locker}")
-        #else:
-        #    status = decision_reason
-        #    print(f"[DEBUG] Request {i} rejected")
-            # Double-check capacity for the assigned locker before final acceptance
-            # Inside ML_policy function, replace the if assigned_locker is not None block with:
+        
 
         if assigned_locker is not None:
             # Check capacity and update temp_occupancy if space is available
@@ -1089,38 +1012,34 @@ def ML_policy(data, model=None, mlb=None, mode = 'multilabel'):
         else:
             status = decision_reason
         
-        # Save results
+        
         results.append({
             'request_id': i,
             'arrival_day': day,
             'type': request['type'],
             'size': request['size'],
             'assigned_locker': assigned_locker,
-            'compartment_size': None,  # Will be updated during compartment assignment
+            'compartment_size': None,  
             'status': status,
-            'pickup_time': request['pickup_time']  # This is known in the simulation, but not during assignment
+            'pickup_time': request['pickup_time']  
         })
         
-        # Add the request to those processed
+    
         current_state['current_requests'].append(request)
     
-    # Process last day's assignments
+   
     if current_day >= 0:
         #print(f"\n[DEBUG] Processing final end-of-day assignments for day {current_day}")
         process_end_of_day_assignments(current_state, current_day, data, results)
     
-    # Visualize occupancy for the extended days (days 11, 12, 13)
-    #print("\n[DEBUG] Visualizing occupancy for extended days:")
-    #for extended_day in range(current_day + 2, max_day + 1):
-    #    visualize_occupancy(current_state, data, extended_day)
-    
-    # Final statistics
+
+
     total_requests = len(results)
     accepted_requests = sum(1 for r in results if r['status'] == 'accepted')
     premium_requests = sum(1 for r in results if r['type'] == 'premium')
     premium_accepted = sum(1 for r in results if r['type'] == 'premium' and r['status'] == 'accepted')
 
-    # statistiche motivi rifiutate 
+
     rejected_requests_ml = sum(1 for r in results if r['status'] == 'ml_reject')
     rejected_requests_capacity = sum(1 for r in results if r['status'] == 'capacity')
 
@@ -1143,16 +1062,6 @@ def ML_policy(data, model=None, mlb=None, mode = 'multilabel'):
     print(f"[DEBUG] Rejected requests (ML Standard): {rejected_requests_ml_standard} ({rejected_requests_ml_standard/(total_requests - premium_requests)*100:.2f}%)")
     print(f"[DEBUG] Rejected requests (Capacity Standard): {rejected_requests_capacity_standard} ({rejected_requests_capacity_standard/(total_requests - premium_requests)*100:.2f}%)")
 
-
-    
-    # Additional occupancy statistics for extended days
-    #print("\n[DEBUG] Extended days occupancy statistics:")
-    #for day in range(11, max_day + 1):
-    #    total_occupied = sum(current_state['occupancy'].get((j, k, day), 0) 
-    #                        for j in J for k in K)
-    #    total_capacity = sum(data['C'][(j, k)] for j in J for k in K)
-    #    #print(f"[DEBUG] Day {day}: {total_occupied}/{total_capacity} compartments occupied " +
-    #          f"({total_occupied/total_capacity*100:.2f}%)")
     
     return pd.DataFrame(results)
 
@@ -1177,47 +1086,47 @@ def oracle_optimization():
             results[counter] = data
             counter += 1
 
-    # Save df_requests to Excel
+  
     with pd.ExcelWriter('instances.xlsx') as writer:
         for counter, data in datasets.items():
             sheet_name = f"Instance_{counter}"
             data['df_requests'].to_excel(writer, sheet_name=sheet_name, index=False)
     print("\nInstances saved in: instances.xlsx")
 
-    # Save df_lockers to Excel
+   
     with pd.ExcelWriter('lockers.xlsx') as writer:
         for counter, data in datasets.items():
             sheet_name = f"Lockers_{counter}"
             data['df_lockers'].to_excel(writer, sheet_name=sheet_name, index=False)
     print("Lockers salvati nel file lockers.xlsx")
 
-    # Save results to Excel
+    
     with pd.ExcelWriter('results_oracle.xlsx') as writer:
         for counter, data in results.items():
             sheet_name = f"Instance_{counter}"
             data.to_excel(writer, sheet_name=sheet_name, index=False)
     print("Results saved in results_oracle.xlsx")
 
-    # Sample requests from each dataset
+    
     sampled_df = pd.DataFrame()
     for counter, data in results.items():
         sampled_requests = sample_requests_per_day(data, 50)
         sampled_df = pd.concat([sampled_df, sampled_requests], ignore_index=True)
 
-    # Process the sampled data
+    
     sampled_df['type'] = sampled_df['type'].apply(lambda x: 1 if x == 'premium' else 0)
     sampled_df['policy'] = sampled_df['policy'].apply(lambda x: x.split(', '))
     sampled_df['status'] = sampled_df['policy'].apply(lambda x: 1 if 'P6' not in x else 0)
 
-    # Create complete dataset without P7
+    
     complete_df = pd.concat(results.values(), ignore_index=True)
     complete_df = complete_df[~complete_df['policy'].str.contains('P7')]
 
-    # Save sampled dataset to Excel
+    
     sampled_df.to_excel('ml_dataset.xlsx', index=False)
     print("\nML-dataset saved to ml_dataset.xlsx")
 
-    # Visualize policy distributions
+  
     plt.figure(figsize=(12, 5))
     plt.subplot(1, 2, 1)
     complete_df['policy'].value_counts().plot(kind='bar')
@@ -1232,7 +1141,7 @@ def oracle_optimization():
     plt.tight_layout()
     plt.show()
 
-    # Print statistics
+
     print("\nDataset Statistics:")
     print("-" * 50)
     print(f"Complete dataset size: {len(complete_df)}")
@@ -1408,12 +1317,12 @@ def modify_pickup_to_4_days(df_requests):
     """
     df_modified = df_requests.copy()
     
-    # Seleziona le righe per ogni tipo di pick-up
+ 
     pickup_1_mask = df_modified['pickup_time'] == 1
     pickup_2_mask = df_modified['pickup_time'] == 2
     pickup_3_mask = df_modified['pickup_time'] == 3
     
-    # Conta i numeri per debugging
+   
     n_pickup_1 = pickup_1_mask.sum()
     n_pickup_2 = pickup_2_mask.sum()
     n_pickup_3 = pickup_3_mask.sum()
@@ -1580,9 +1489,9 @@ def modify_pickup(request,data, assigned_locker):
     """Modifica il pickup time di una richiesta in base alla distanza dal locker assegnato"""
     data = data.copy()
     #customer_pos = data['df_requests'].loc[request['request_id']][['x', 'y']].values
-    customer_pos = (request['x'], request['y'])  # Assumendo che le coordinate siano nel dizionario
+    customer_pos = (request['x'], request['y'])  
     original_pickup_time = request['pickup_time']
-    #customer_pos = (request['x'], request['y'])  # Assumendo che le coordinate siano nel dizionario
+    
     locker_pos = (data['lockers'][assigned_locker]['x'], data['lockers'][assigned_locker]['y'])  # Assumendo che
     distance = calculate_distance(customer_pos, locker_pos)
 
